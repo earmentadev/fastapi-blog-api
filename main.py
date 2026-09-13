@@ -1,13 +1,18 @@
+from typing import Annotated
+from contextlib import asynccontextmanager
+from fastapi.exception_handlers import http_exception_handler, request_validation_exception_handler
+
 from fastapi import Depends,FastAPI, Request,HTTPException,status #Depends is dependency injection
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse # use jsonresponse
+#from fastapi.responses import JSONResponse # use jsonresponse
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from typing import Annotated
 
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsynSession
+from sqlalchemy.orm import selectinload
 import models
 from database import Base,engine,get_db
 from schemas import (
@@ -19,7 +24,19 @@ from schemas import (
     UserUpdate
     )
 #from fastapi.responses import HTMLResponse
-Base.metadata.create_all(bind=engine)
+
+#Base.metadata.create_all(bind=engine)#sync
+
+@asynccontextmanager
+async def lifespan(_app):
+    # Startup
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    yield
+    # Shtdown
+    await engine.dispose()
+
+    
 app=FastAPI()
 app.mount("/static",StaticFiles(directory="static"),name="static")
 app.mount("/media",StaticFiles(directory="media"),name="media")
