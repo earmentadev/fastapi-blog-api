@@ -1,6 +1,5 @@
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 from datetime import datetime
-from models import User,Post
 
 class UserBase(BaseModel):
     user_name:str=Field(min_length=1, max_length=50)
@@ -12,7 +11,7 @@ class UserCreate(UserBase):
 
 
 class UserResponse(UserBase):
-    model_config = ConfigDict(from_attributes=True)
+    model_config = ConfigDict(from_attributes=True) # this allow to use atributes from the database model like user.user_name
     id:int
     image_file:str|None
     image_path:str
