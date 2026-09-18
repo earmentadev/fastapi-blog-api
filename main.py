@@ -1,6 +1,6 @@
 from typing import Annotated
 from contextlib import asynccontextmanager
-from fastapi.exception_handlers import http_exception_handler
+from fastapi.exception_handlers import http_exception_handler, request_validation_exception_handler
 
 from fastapi import Depends,FastAPI, Request,HTTPException,status #Depends is dependency injection
 from fastapi.exceptions import RequestValidationError
@@ -45,7 +45,7 @@ app.include_router(posts.router,prefix="/api/posts",tags=["posts"])
 @app.get("/",include_in_schema=False,name="home") 
 @app.get("/posts",include_in_schema=False,name="posts")
 async def home (request: Request,db:Annotated[AsyncSession, Depends(get_db)]):
-    result=await db.execute(select(models.Post).options(selectinload(models.Post.author)))
+    result=await db.execute(select(models.Post).options(selectinload(models.Post.author)).order_by(models.Post.date_posted.desc()))
     posts=result.scalars().all()
     return templates.TemplateResponse(
          request,
@@ -73,7 +73,7 @@ async def user_posts_page(request:Request,user_id:int,db:Annotated[AsyncSession,
             status_code=status.HTTP_404_NOT_FOUND,
               detail="User not found"
                 )
-    result=db.execute(select(models.Post).where(models.Post.user_id==user_id).options(selectinload(models.Post.author)))
+    result=await db.execute(select(models.Post).options(selectinload(models.Post.author)).where(models.Post.user_id==user_id).order_by(models.Post.date_posted.desc()))
     posts=result.scalars().all()
     return templates.TemplateResponse(
                     request,"user_posts.html",
@@ -116,7 +116,7 @@ async def general_http_exception_handler(request: Request, exception: StarletteH
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exception: RequestValidationError):
     if request.url.path.startswith("/api"):
-        return await http_exception_handler(request, exception)
+        return await request_validation_exception_handler(request, exception)
     
     return templates.TemplateResponse(
         request,

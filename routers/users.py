@@ -33,7 +33,7 @@ async def get_user_posts(user_id:int,db:Annotated[AsyncSession, Depends(get_db)]
             status_code=status.HTTP_404_NOT_FOUND,
               detail="User not found"
                 )
-    result=await db.execute(select(models.Post).where(models.Post.user_id==user_id).options(selectinload(models.Post.author)))
+    result=await db.execute(select(models.Post).where(models.Post.user_id==user_id).options(selectinload(models.Post.author)).order_by(models.Post.date_posted.desc()))
     posts=result.scalars().all()
     return posts
 
