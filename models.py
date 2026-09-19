@@ -13,12 +13,14 @@ class User(Base):
 
     id: Mapped[int] = mapped_column("usr_id",Integer, primary_key=True, index=True)
     user_name: Mapped[str] = mapped_column("usr_name",String(50), unique=True, nullable=False)
+    password_hash:Mapped[str] = mapped_column("usr_password_hash",String(200), unique=True, nullable=False)
     email: Mapped[str] = mapped_column("usr_email",String(120), unique=True, nullable=False)
     image_file: Mapped[str | None] = mapped_column("usr_image_path",
         String(200),
         nullable=True,
         default=None,
     )
+    
 
     posts: Mapped[list[Post]] = relationship(back_populates="author",cascade="all, delete-orphan")
 
