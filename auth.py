@@ -61,7 +61,7 @@ async def get_current_user(token:Annotated[str, Depends(oauth2_schema)], db: Ann
                     detail="Invalid or expire Token",
                     headers={"WWW-Authenticate":"Bearer"}
                 )
-    result = await db.excute(select(models.User).where(models.User-id==user_id_int))
+    result = await db.execute(select(models.User).where(models.User.id==user_id_int))
     user=result.scalars().first()
     if not user:
         raise HTTPException(

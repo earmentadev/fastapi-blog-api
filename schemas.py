@@ -40,7 +40,7 @@ class PostUpdate(BaseModel):
     content:str|None=Field(default=None, min_length=1)
 
 class PostCreate(PostBase):
-    user_id:int
+    pass
 
 
 class PostResponse(PostBase):

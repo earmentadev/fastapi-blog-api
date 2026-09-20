@@ -13,7 +13,7 @@ from datetime import timedelta
 
 from fastapi.security import OAuth2PasswordRequestForm
 
-from auth import create_access_token, oauth2_schema, verify_access_token, verify_password, hash_password
+from auth import create_access_token, CurrenteUser, verify_password, hash_password
 from config import settings
 
 
@@ -75,35 +75,8 @@ async def login_for_access_token(form_data:Annotated[OAuth2PasswordRequestForm,D
 
 ## get_current_user
 @router.get("/me", response_model=UserPrivateResponse)
-async def get_current_user(token: Annotated[str, Depends(oauth2_schema)],db: Annotated[AsyncSession, Depends(get_db)],):
-    """Get the currently authenticated user."""
-    user_id = verify_access_token(token)
-    if user_id is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or expired token",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-    # Validate user_id is a valid integer (defense against malformed JWT)
-    try:
-        user_id_int = int(user_id)
-    except (TypeError, ValueError):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or expired token",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-    result = await db.execute(select(models.User).where(models.User.id == user_id_int), )
-    user = result.scalars().first()
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="User not found",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-    return user
+async def get_current_user(current_user: CurrenteUser):
+    return current_user
 
 # add get all users
 @router.get("/{user_id}",response_model=UserPublicResponse)
@@ -111,7 +84,7 @@ async def get_user(user_id:int,db:Annotated[AsyncSession, Depends(get_db)]):
     result=await db.execute(select(models.User).where(models.User.id==user_id)) 
     user=result.scalars().first()
     if  user:
-        return user
+        return CurrenteUser
     
     raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -135,8 +108,14 @@ async def get_user_posts(user_id:int,db:Annotated[AsyncSession, Depends(get_db)]
 
 # add put for the archetype
 @router.patch("/{user_id}",response_model=UserPublicResponse,)
-async def update_user_partial(user_id:int,user_update:UserUpdate,db:Annotated[AsyncSession, Depends(get_db)]):
-    result=await db.execute(select(models.User).where(models.User.id==user_id)) 
+async def update_user_partial(user_id:int,user_update:UserUpdate,current_user:CurrenteUser,db:Annotated[AsyncSession, Depends(get_db)]):
+    if user_id != current_user.id:
+        raise HTTPException( 
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not authorized to update this user because you are not the owner"
+            )
+    
+    result = await db.execute(select(models.User).where(models.User.id==user_id)) 
     user=result.scalars().first()
     if not user:
         raise HTTPException(
@@ -145,7 +124,7 @@ async def update_user_partial(user_id:int,user_update:UserUpdate,db:Annotated[As
 
         )
     if user_update.user_name != None and user_update.user_name.lower() != user.user_name.lower():
-         result=db.execute(select(models.User).where(func.lower(models.User.user_name)==user_update.user_name.lower()) ) 
+         result = await db.execute(select(models.User).where(func.lower(models.User.user_name)==user_update.user_name.lower()) ) 
          existing_user=result.scalars().first()
          if existing_user:
              raise HTTPException(
@@ -155,7 +134,7 @@ async def update_user_partial(user_id:int,user_update:UserUpdate,db:Annotated[As
                      )
 
     if user_update.email != None and user_update.email.lower() !=user.email.lower():
-        result=await db.execute(select(models.User).where(func.lower(models.User.email)==user_update.email.lower()))
+        result = await db.execute(select(models.User).where(func.lower(models.User.email)==user_update.email.lower()))
         existing_email=result.scalars().first()
         if existing_email:
             raise HTTPException(
@@ -179,7 +158,13 @@ async def update_user_partial(user_id:int,user_update:UserUpdate,db:Annotated[As
     return user   
 
 @router.delete("/{user_id}",status_code=status.HTTP_204_NO_CONTENT)
-async def delte_user(user_id:int,db:Annotated[AsyncSession, Depends(get_db)]):
+async def delete_user(user_id:int,current_user:CurrenteUser,db:Annotated[AsyncSession, Depends(get_db)]):
+    if user_id != current_user.id:
+        raise HTTPException( 
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not authorized to delete this user because you are not the owner"
+            )
+    
     result=await db.execute(select(models.User).where(models.User.id==user_id) ) 
     user=result.scalars().first()
     if  not user:
