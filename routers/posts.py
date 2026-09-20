@@ -8,6 +8,7 @@ from sqlalchemy.orm import selectinload
 import models
 from database import get_db
 from schemas import PostCreate,PostUpdate,PostResponse
+from auth import get_current_user
 
 router=APIRouter()#"api/posts it is past in prefix parameter when you import an include routers"
 
@@ -27,21 +28,21 @@ async def get_posts(db:Annotated[AsyncSession, Depends(get_db)]):
      return posts
 
 @router.post("",response_model=PostResponse,status_code=status.HTTP_201_CREATED)
-async def post_post(post:PostCreate,db:Annotated[AsyncSession, Depends(get_db)]):
-     result=await db.execute(select(models.User).where(models.User.id==post.user_id) )         
-     user=result.scalars().first()
+async def post_post(post:PostCreate,current_user:Annotated[models.User,Depends(get_current_user)],db:Annotated[AsyncSession, Depends(get_db)]):
+     # result=await db.execute(select(models.User).where(models.User.id==post.user_id) )         
+     # user=result.scalars().first()
 
-     if not user:
-         raise HTTPException(
-              status_code=status.HTTP_404_NOT_FOUND,
-                  detail="User not found"
+     # if not user:
+     #     raise HTTPException(
+     #          status_code=status.HTTP_404_NOT_FOUND,
+     #              detail="User not found"
     
-            )
+     #        )
      
      new_post= models.Post(
          title=post.title,
          content=post.content,
-         user_id=post.user_id
+         user_id=current_user.user_id
          )
      
      db.add(new_post)

@@ -6,6 +6,13 @@ from pwdlib import PasswordHash
 
 from config import settings
 
+from typing import Annotated
+from fastapi import Depends,HTTPException,status
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+import models
+from database import get_db
+
 password_hash = PasswordHash.recommended()#argon2
 
 oauth2_schema=OAuth2PasswordBearer(tokenUrl="api/users/token") #extract form the hader the token
@@ -37,4 +44,34 @@ def verify_access_token(token:str) -> str | None:
         return None
     else:
         return payload.get("sub")
+    
+async def get_current_user(token:Annotated[str, Depends(oauth2_schema)], db: Annotated [AsyncSession, Depends(get_db)]) -> models.User:
+    user_id= verify_access_token(token)
+    if user_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expire Token",
+            headers={"WWW-Authenticate":"Bearer"}
+        )
+    try:
+        user_id_int=int(user_id)
+    except:
+        raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Invalid or expire Token",
+                    headers={"WWW-Authenticate":"Bearer"}
+                )
+    result = await db.excute(select(models.User).where(models.User-id==user_id_int))
+    user=result.scalars().first()
+    if not user:
+        raise HTTPException(
+                            status_code=status.HTTP_401_UNAUTHORIZED,
+                            detail="IUser not found",
+                            headers={"WWW-Authenticate":"Bearer"}
+                        )
+    return user
+
+CurrenteUser = Annotated[models.User,Depends(get_current_user)]# Type alias from annoted to no repeat code
+
+
     
