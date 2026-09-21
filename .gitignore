@@ -12,3 +12,4 @@ wheels/
 ### Database Files ###
 *.sqlite3
 *.db
+
