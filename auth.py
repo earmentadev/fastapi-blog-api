@@ -13,6 +13,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 import models
 from database import get_db
 
+import hashlib
+import secrets
+
 password_hash = PasswordHash.recommended()#argon2
 
 oauth2_schema=OAuth2PasswordBearer(tokenUrl="api/users/token") #extract form the hader the token
@@ -22,6 +25,12 @@ def hash_password(password:str) -> str:
 
 def verify_password(palin_password:str,hashed_password:str) -> bool: # we are using hash because hashin is ireversible encrypt is reversible
     return password_hash.verify(palin_password,hashed_password)
+
+def generete_reset_token()-> str:
+    return secrets.token_urlsafe(32)
+
+def hash_reset_token(token:str)-> str:
+    return hashlib.sha256(token.encode()).hexdigest()
 
 def create_access_token(data:dict,expires_delta:timedelta | None = None) -> str:
     """Create a Json Web Token access token"""

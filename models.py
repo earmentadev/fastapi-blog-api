@@ -23,6 +23,7 @@ class User(Base):
     
 
     posts: Mapped[list[Post]] = relationship(back_populates="author",cascade="all, delete-orphan")
+    reset_tokens: Mapped[list[PasswordResetToken]] = relationship(back_populates="user",cascade="all, delete-orphan")
 
     @property
     def image_path(self) -> str:
@@ -48,3 +49,20 @@ class Post(Base):
     )
 
     author: Mapped[User] = relationship(back_populates="posts")
+
+class PasswordResetToken(Base):
+    __tablename__ = "password_reset_tokens"
+
+    id: Mapped[int] = mapped_column("prt_id",Integer, primary_key=True, index=True)
+    user_id: Mapped[int] = mapped_column("prt_user_id",ForeignKey("users.usr_id"), nullable=False)
+    token_hash: Mapped[str] = mapped_column("prt_token_hash",String(64), unique=True, nullable=False)
+    expires_at: Mapped[datetime] = mapped_column("prt_expires_at",
+        DateTime(timezone=True),
+        nullable=False,
+    )
+    created_at: Mapped[datetime] = mapped_column("prt_created_at",
+        DateTime(timezone=True),
+        default=lambda: datetime.now(UTC),
+    )
+
+    user: Mapped[User] = relationship(back_populates="reset_tokens")

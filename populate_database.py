@@ -6,7 +6,7 @@ import httpx
 from sqlalchemy import delete, select, update
 
 import models
-from database import AsyncSessionLocal, engine
+from database import AsyncSessionLocal, engine,Base
 from image_utils import PROFILE_PICS_DIR
 from main import app
 
@@ -232,7 +232,21 @@ POST_44 = {
     "content": "If you've paginated all the way to this post, the 44th one... you get to learn this fun fact: that my high school football number was #44. Other notable absolute legends who wore number #44 include: Jerry West (NBA - Also fellow WV Native), Hank Aaron (MLB), and Floyd Little (NFL).",
 }
 
+async def clear_existing_data() -> None:
+    # Delete profile pictures from local storage
+    if PROFILE_PICS_DIR.exists():
+        for file in PROFILE_PICS_DIR.iterdir():
+            if file.is_file() and file.name != ".gitkeep":
+                file.unlink()
+        print(f"Deleted profile pictures from {PROFILE_PICS_DIR}")
 
+    # Clear database tables (order respects foreign keys)
+    async with AsyncSessionLocal() as db:
+        await db.execute(delete(models.PasswordResetToken))
+        await db.execute(delete(models.Post))
+        await db.execute(delete(models.User))
+        await db.commit()
+    print("Cleared existing data")
 
 
 
@@ -275,8 +289,11 @@ async def populate() -> None:
         transport=transport,
         base_url="http://localhost",
     ) as client:
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+
         # Clear existing data (local images first, then database)
-       
+        await clear_existing_data()
 
         users: list[dict] = []
 
