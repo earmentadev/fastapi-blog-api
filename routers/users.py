@@ -30,11 +30,13 @@ from config import settings
 from PIL import UnidentifiedImageError
 from starlette.concurrency import run_in_threadpool
 
-from image_utils import process_profile_image, delete_profile_image
+from image_utils import process_profile_image, delete_profile_image,upload_profile_image
 # fastapi pagination  hhttps://github.com/uriyyo/fastapi-pagination
 
 from sqlalchemy import delete as sql_delete
 from email_utils import send_password_reset_email
+
+from botocore.exceptions import ClientError
 
 router=APIRouter()#"api/users it is past in prefix parameter when you import an include routers"
 
@@ -307,7 +309,7 @@ async def delete_user(user_id:int,current_user:CurrenteUser,db:Annotated[AsyncSe
     old_filename=user.image_file
 
     if old_filename:
-        delete_profile_image(old_filename)
+        await delete_profile_image(old_filename)
 
 @router.patch("/{user_id}/picture",response_model=UserPrivateResponse)
 async def upload_profile_picture(user_id:int,file:UploadFile,current_user:CurrenteUser,db:Annotated[AsyncSession, Depends(get_db)]):
@@ -326,12 +328,20 @@ async def upload_profile_picture(user_id:int,file:UploadFile,current_user:Curren
         )
 
     try:
-        new_filename = await run_in_threadpool(process_profile_image,content) #sync block the event loop
+        processed_bytes, new_filename = await run_in_threadpool(process_profile_image,content) #sync block the event loop
     except UnidentifiedImageError as error:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invalid image file. Please upload a valid image (JPEG, PNG,GIF , WebP)"
         ) from error
+    # Upload to S3 (also runs in threadpool via async wrapper)
+    try:
+        await upload_profile_image(processed_bytes, new_filename)
+    except ClientError as err:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to upload image. Please try again.",
+        ) from err
 
     old_filename = current_user.image_file
 
@@ -341,7 +351,7 @@ async def upload_profile_picture(user_id:int,file:UploadFile,current_user:Curren
     await db.refresh(current_user)
 
     if old_filename:
-        delete_profile_image(old_filename)
+        await delete_profile_image(old_filename)
 
     return current_user
 
@@ -365,7 +375,7 @@ async def delete_user_picture(user_id: int, current_user: CurrenteUser,db:Annota
     await db.commit()
     await db.refresh(current_user)
 
-    delete_profile_image(old_filename)
+    await delete_profile_image(old_filename)
 
     return current_user
     

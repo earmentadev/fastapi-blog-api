@@ -7,7 +7,6 @@ from sqlalchemy import delete, select, update
 
 import models
 from database import AsyncSessionLocal, engine,Base
-from image_utils import PROFILE_PICS_DIR
 from main import app
 import selectors
 
@@ -15,10 +14,10 @@ POPULATE_IMAGES_DIR = Path("populate_images")
 
 USERS = [
     {
-        "user_name": "CoreyMSchafer",
-        "email": "CoreyMSchafer@gmail.com",
+        "user_name": "earmenta",
+        "email": "earmenta.nv@gmail.com",
         "password": "TestPassword1!",
-        "image": "corey.png",
+        "image": "earmenta.png",
     },
     {
         "user_name": "DefaultDude",
@@ -27,10 +26,10 @@ USERS = [
         # No image - uses default
     },
     {
-        "user_name": "WillowTheCat",
-        "email": "TestEmail3@test.com",
+        "user_name": "varmenta",
+        "email": "valeeryc@gmail.com",
         "password": "TestPassword3!",
-        "image": "willow.png",
+        "image": "varmenta.png",
     },
     {
         "user_name": "FarmDogs",
@@ -234,13 +233,6 @@ POST_44 = {
 }
 
 async def clear_existing_data() -> None:
-    # Delete profile pictures from local storage
-    if PROFILE_PICS_DIR.exists():
-        for file in PROFILE_PICS_DIR.iterdir():
-            if file.is_file() and file.name != ".gitkeep":
-                file.unlink()
-        print(f"Deleted profile pictures from {PROFILE_PICS_DIR}")
-
     # Clear database tables (order respects foreign keys)
     async with AsyncSessionLocal() as db:
         await db.execute(delete(models.PasswordResetToken))
