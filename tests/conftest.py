@@ -18,19 +18,20 @@ os.environ["AWS_DEFAULT_REGION"] = "us-east-1"
 
 import boto3
 import pytest
-from httpx import ASGITransport, AsyncClient
+from httpx2 import ASGITransport, AsyncClient
 from moto import mock_aws
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
 from database import Base, get_db
 from main import app
+import asyncio
 
 pytest_plugins = ["anyio"]
 
 @pytest.fixture(scope="session")
 def anyio_backend():
-    return "asyncio"
+    return ("asyncio", {"loop_factory": asyncio.SelectorEventLoop})
 
 
 @pytest.fixture(scope="session")# forcreate one time de database
@@ -54,7 +55,7 @@ async def setup_database(test_engine):
     await test_engine.dispose()
 
 
-@pytest.fixture
+@pytest.fixture #function scope
 async def db_session(test_engine,setup_database) -> AsyncGenerator[AsyncSession]:
     conn = await test_engine.connect()
     trans = await conn.begin()
@@ -71,9 +72,70 @@ async def db_session(test_engine,setup_database) -> AsyncGenerator[AsyncSession]
             yield session
         finally:
             await session.close()
-            await trans.rollback()
+            await trans.rollback() # when the test is finnish rollback the changes
             await conn.close()
 
+@pytest.fixture #mock for aws S3 
+def mocked_aws():
+    with mock_aws():
+        s3 = boto3.client("s3", region_name="us-east-1")
+        s3.create_bucket(Bucket=os.environ["S3_BUCKET_NAME"])
+        yield s3
+
+#fastapi Best freature for testing (dependency override)
+@pytest.fixture
+async def client(
+    db_session: AsyncSession,
+    mocked_aws,
+) -> AsyncGenerator[AsyncClient]:
+
+    async def override_get_db():
+        yield db_session
+
+    app.dependency_overrides[get_db] = override_get_db #instead to mock the connection to the database
+
+    async with AsyncClient(
+        transport=ASGITransport(app=app),
+        base_url="http://test",
+    ) as ac:
+        yield ac
+
+    app.dependency_overrides.clear()
+
+async def create_test_user(
+    client: AsyncClient,
+    username: str = "testuser",
+    email: str = "test@example.com",
+    password: str = "testpassword123",
+) -> dict:
+    response = await client.post(
+        "/api/users",
+        json={
+            "user_name": username,
+            "email": email,
+            "password": password,
+        },
+    )
+    assert response.status_code == 201, f"Failed to create user: {response.text}"
+    return response.json()
 
 
+async def login_user(
+    client: AsyncClient,
+    email: str = "test@example.com",
+    password: str = "testpassword123",
+) -> str:
+    response = await client.post(
+        "/api/users/token",
+        data={ # use form NO json
+            "username": email,
+            "password": password,
+        },
+    )
+    assert response.status_code == 200, f"Failed to login: {response.text}"
+    return response.json()["access_token"]
+
+
+def auth_header(token: str) -> dict[str, str]:
+    return {"Authorization": f"Bearer {token}"}
 
